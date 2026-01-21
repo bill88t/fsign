@@ -760,5 +760,6 @@ class TestListCommand:
         assert result is False
 
 
-
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])
 

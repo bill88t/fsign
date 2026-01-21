@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import os, sys, struct, hashlib, subprocess, tempfile, re
+import os, sys, struct, hashlib, subprocess, tempfile, re, time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Tuple, Dict, Optional, Iterator, NamedTuple
 from pathlib import Path
@@ -236,7 +236,6 @@ def gpg_detach_sign_bytes(manifest_bytes: bytes, key_id: str | None) -> bytes:
         
         # If not the last attempt, we'll retry
         if attempt < max_retries - 1:
-            import time
             time.sleep(0.5)  # Brief delay before retry
     
     # All retries exhausted
