@@ -35,7 +35,7 @@ class TestBasicOperations:
 
         root_b = os.fsencode(str(tmp_path))
         files = list(fsign.walk_bytes(root_b))
-        
+
         # Should find 3 files, excluding both .fsign files
         assert len(files) == 3
         filenames = [os.path.basename(f) for f in files]
@@ -48,7 +48,7 @@ class TestBasicOperations:
         test_file.write_bytes(content)
 
         entry = fsign.hash_entry(os.fsencode(str(test_file)))
-        
+
         assert entry.type == 0  # regular file
         assert entry.length == len(content)
         assert len(entry.digest) == 32  # SHA-256
@@ -61,7 +61,7 @@ class TestBasicOperations:
         link.symlink_to(target)
 
         entry = fsign.hash_entry(os.fsencode(str(link)))
-        
+
         assert entry.type == 1  # symlink
         assert entry.length > 0
         assert len(entry.digest) == 32
@@ -76,7 +76,7 @@ class TestBasicOperations:
 
         root_b = os.fsencode(str(root))
         path_b = os.fsencode(str(subfile))
-        
+
         rel = fsign.relpath_bytes(path_b, root_b)
         assert b"sub" in rel
         assert b"file.txt" in rel
@@ -94,13 +94,13 @@ class TestManifestOperations:
         root_b = os.fsencode(str(tmp_path))
         files = list(fsign.walk_bytes(root_b))
         entries = [fsign.hash_entry(f) for f in files]
-        
+
         # Build manifest
         manifest = fsign.build_manifest(root_b, entries)
-        
+
         # Parse it back
         parsed = fsign.parse_manifest(manifest)
-        
+
         assert len(parsed) == len(entries)
         # Check that parsing returns correct structure
         for path, typ, length, digest in parsed:
@@ -118,10 +118,10 @@ class TestManifestOperations:
         root_b = os.fsencode(str(tmp_path))
         files = list(fsign.walk_bytes(root_b))
         entries = [fsign.hash_entry(f) for f in files]
-        
+
         manifest = fsign.build_manifest(root_b, entries)
         parsed = fsign.parse_manifest(manifest)
-        
+
         paths = [p[0] for p in parsed]
         assert paths == sorted(paths)
 
@@ -148,9 +148,9 @@ class TestFileFormat:
         signature = b"test signature"
 
         fsign.write_fsign(str(fsign_path), manifest, signature)
-        
+
         read_manifest, read_sig = fsign.read_fsign(str(fsign_path))
-        
+
         assert read_manifest == manifest
         assert read_sig == signature
 
@@ -158,7 +158,7 @@ class TestFileFormat:
         """Test reading file with bad magic."""
         bad_file = tmp_path / "bad.fsign"
         bad_file.write_bytes(b"WRONG!" + struct.pack("!BB", 1, 0))
-        
+
         with pytest.raises(RuntimeError, match="Bad header or magic"):
             fsign.read_fsign(str(bad_file))
 
@@ -166,7 +166,7 @@ class TestFileFormat:
         """Test reading file with unsupported version."""
         bad_file = tmp_path / "bad.fsign"
         bad_file.write_bytes(fsign.MAGIC + struct.pack("!BB", 99, 0))
-        
+
         with pytest.raises(RuntimeError, match="Unsupported version"):
             fsign.read_fsign(str(bad_file))
 
@@ -179,9 +179,7 @@ class TestGPGOperations:
         """Check if GPG is available."""
         try:
             result = subprocess.run(
-                ["gpg", "--version"],
-                capture_output=True,
-                timeout=5
+                ["gpg", "--version"], capture_output=True, timeout=5
             )
             return result.returncode == 0
         except (FileNotFoundError, subprocess.TimeoutExpired):
@@ -192,7 +190,7 @@ class TestGPGOperations:
         """Create a test GPG key."""
         gpg_home = tmp_path / "gpg_home"
         gpg_home.mkdir(mode=0o700)
-        
+
         # Create a batch file for key generation
         batch_content = """
             %no-protection
@@ -203,32 +201,39 @@ class TestGPGOperations:
             Expire-Date: 0
             %commit
         """
-        
+
         batch_file = tmp_path / "keygen_batch"
         batch_file.write_text(batch_content)
-        
+
         try:
             subprocess.run(
-                ["gpg", "--homedir", str(gpg_home), "--batch", "--gen-key", str(batch_file)],
+                [
+                    "gpg",
+                    "--homedir",
+                    str(gpg_home),
+                    "--batch",
+                    "--gen-key",
+                    str(batch_file),
+                ],
                 capture_output=True,
                 timeout=30,
-                check=True
+                check=True,
             )
-            
+
             # Get the key ID
             result = subprocess.run(
                 ["gpg", "--homedir", str(gpg_home), "--list-keys", "--with-colons"],
                 capture_output=True,
                 text=True,
-                timeout=5
+                timeout=5,
             )
-            
+
             key_id = None
             for line in result.stdout.splitlines():
                 if line.startswith("fpr:"):
                     key_id = line.split(":")[9]
                     break
-            
+
             return str(gpg_home), key_id
         except (subprocess.TimeoutExpired, subprocess.CalledProcessError):
             pytest.skip("Could not generate test GPG key")
@@ -248,127 +253,131 @@ class TestEndToEnd:
         """Create a test directory structure."""
         root = tmp_path / "test_root"
         root.mkdir()
-        
+
         # Create various files
         (root / "file1.txt").write_text("Content of file 1")
         (root / "file2.txt").write_text("Content of file 2")
-        
+
         subdir = root / "subdir"
         subdir.mkdir()
         (subdir / "file3.txt").write_text("Content of file 3")
-        
+
         # Create a symlink
         link = root / "link.txt"
         link.symlink_to(root / "file1.txt")
-        
+
         return root
 
     def test_create_and_verify_mock(self, test_directory, monkeypatch):
         """Test create and verify with mocked GPG operations."""
+
         # Mock GPG signing to avoid needing actual GPG setup
         def mock_sign(manifest, key_id):
             return b"MOCK_SIGNATURE_" + manifest[:10]
-        
+
         def mock_verify(manifest, sig):
             return fsign.GpgStatus(
                 valid_signature=True,
                 fingerprint="ABCD1234ABCD1234",
                 primary_key_id="ABCD1234",
                 user_id="Test User <test@example.com>",
-                summary="Signature is valid."
+                summary="Signature is valid.",
             )
-        
+
         monkeypatch.setattr(fsign, "gpg_detach_sign_bytes", mock_sign)
         monkeypatch.setattr(fsign, "gpg_verify_sig", mock_verify)
-        
+
         # Create signature
         fsign.create_fsign(str(test_directory), quiet=True)
-        
+
         # Verify it exists
         fsign_file = test_directory / ".fsign"
         assert fsign_file.exists()
-        
+
         # Verify the signature
         result = fsign.verify_fsign(str(test_directory), quiet=True)
         assert result is True
 
     def test_verify_detects_modified_file(self, test_directory, monkeypatch):
         """Test that verify detects when a file is modified."""
+
         def mock_sign(manifest, key_id):
             return b"MOCK_SIGNATURE"
-        
+
         def mock_verify(manifest, sig):
             return fsign.GpgStatus(
                 valid_signature=True,
                 fingerprint="ABCD1234",
                 primary_key_id="ABCD1234",
                 user_id="Test",
-                summary="Valid"
+                summary="Valid",
             )
-        
+
         monkeypatch.setattr(fsign, "gpg_detach_sign_bytes", mock_sign)
         monkeypatch.setattr(fsign, "gpg_verify_sig", mock_verify)
-        
+
         # Create signature
         fsign.create_fsign(str(test_directory), quiet=True)
-        
+
         # Modify a file
         (test_directory / "file1.txt").write_text("MODIFIED CONTENT")
-        
+
         # Verify should fail
         result = fsign.verify_fsign(str(test_directory), quiet=True)
         assert result is False
 
     def test_verify_detects_missing_file(self, test_directory, monkeypatch):
         """Test that verify detects when a file is missing."""
+
         def mock_sign(manifest, key_id):
             return b"MOCK_SIGNATURE"
-        
+
         def mock_verify(manifest, sig):
             return fsign.GpgStatus(
                 valid_signature=True,
                 fingerprint="ABCD1234",
                 primary_key_id="ABCD1234",
                 user_id="Test",
-                summary="Valid"
+                summary="Valid",
             )
-        
+
         monkeypatch.setattr(fsign, "gpg_detach_sign_bytes", mock_sign)
         monkeypatch.setattr(fsign, "gpg_verify_sig", mock_verify)
-        
+
         # Create signature
         fsign.create_fsign(str(test_directory), quiet=True)
-        
+
         # Remove a file
         (test_directory / "file1.txt").unlink()
-        
+
         # Verify should fail
         result = fsign.verify_fsign(str(test_directory), quiet=True)
         assert result is False
 
     def test_verify_detects_extra_file(self, test_directory, monkeypatch):
         """Test that verify detects when an extra file is added."""
+
         def mock_sign(manifest, key_id):
             return b"MOCK_SIGNATURE"
-        
+
         def mock_verify(manifest, sig):
             return fsign.GpgStatus(
                 valid_signature=True,
                 fingerprint="ABCD1234",
                 primary_key_id="ABCD1234",
                 user_id="Test",
-                summary="Valid"
+                summary="Valid",
             )
-        
+
         monkeypatch.setattr(fsign, "gpg_detach_sign_bytes", mock_sign)
         monkeypatch.setattr(fsign, "gpg_verify_sig", mock_verify)
-        
+
         # Create signature
         fsign.create_fsign(str(test_directory), quiet=True)
-        
+
         # Add a new file
         (test_directory / "new_file.txt").write_text("NEW CONTENT")
-        
+
         # Verify should fail
         result = fsign.verify_fsign(str(test_directory), quiet=True)
         assert result is False
@@ -385,9 +394,9 @@ class TestIgnorePatterns:
         """Test loading patterns from .fsignignore file."""
         ignore_file = tmp_path / ".fsignignore"
         ignore_file.write_text("*.log\n__pycache__/\n# comment\n\n.git/")
-        
+
         patterns = fsign.load_ignore_patterns(str(tmp_path))
-        
+
         assert "*.log" in patterns
         assert "__pycache__/" in patterns
         assert ".git/" in patterns
@@ -399,7 +408,7 @@ class TestIgnorePatterns:
         root_b = os.fsencode(str(tmp_path))
         test_file = tmp_path / "test.log"
         test_file.write_text("log")
-        
+
         patterns = ["*.log"]
         assert fsign.should_exclude(os.fsencode(str(test_file)), root_b, patterns)
 
@@ -410,7 +419,7 @@ class TestIgnorePatterns:
         subdir.mkdir()
         test_file = subdir / "cache.pyc"
         test_file.write_text("cache")
-        
+
         patterns = ["__pycache__/"]
         assert fsign.should_exclude(os.fsencode(str(test_file)), root_b, patterns)
 
@@ -422,15 +431,15 @@ class TestIgnorePatterns:
         cache_dir = tmp_path / "__pycache__"
         cache_dir.mkdir()
         (cache_dir / "cache.pyc").write_text("cache")
-        
+
         # Create ignore file
         ignore_file = tmp_path / ".fsignignore"
         ignore_file.write_text("*.log\n__pycache__/")
-        
+
         patterns = fsign.load_ignore_patterns(str(tmp_path))
         root_b = os.fsencode(str(tmp_path))
         files = list(fsign.walk_bytes(root_b, patterns))
-        
+
         # Should only find file1.txt (not .log, not cache.pyc)
         filenames = [os.path.basename(f).decode() for f in files]
         assert "file1.txt" in filenames
@@ -444,19 +453,19 @@ class TestIgnorePatterns:
         (tmp_path / "exclude.log").write_text("exclude this")
         ignore_file = tmp_path / ".fsignignore"
         ignore_file.write_text("*.log")
-        
+
         def mock_sign(manifest, key_id):
             return b"MOCK_SIG"
-        
+
         monkeypatch.setattr(fsign, "gpg_detach_sign_bytes", mock_sign)
-        
+
         # Create signature
         fsign.create_fsign(str(tmp_path), quiet=True)
-        
+
         # Read and verify manifest doesn't include .log file
         manifest, _ = fsign.read_fsign(str(tmp_path / ".fsign"))
         parsed = fsign.parse_manifest(manifest)
-        
+
         paths = [p[0].decode() for p in parsed]
         assert any("include.txt" in p for p in paths)
         assert not any("exclude.log" in p for p in paths)
@@ -469,41 +478,37 @@ class TestJSONOutput:
         """Test JSON output for successful verification."""
         # Setup
         (tmp_path / "test.txt").write_text("test content")
-        
+
         def mock_sign(manifest, key_id):
             return b"MOCK_SIG"
-        
+
         def mock_verify(manifest, sig):
             return fsign.GpgStatus(
                 valid_signature=True,
                 fingerprint="ABCD1234ABCD1234",
                 primary_key_id="ABCD1234",
                 user_id="Test User <test@example.com>",
-                summary="Valid"
+                summary="Valid",
             )
-        
+
         monkeypatch.setattr(fsign, "gpg_detach_sign_bytes", mock_sign)
         monkeypatch.setattr(fsign, "gpg_verify_sig", mock_verify)
-        
+
         # Create signature
         fsign.create_fsign(str(tmp_path), quiet=True)
-        
+
         # Capture JSON output
         import io
         import contextlib
-        
+
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
-            result = fsign.verify_fsign(
-                str(tmp_path), 
-                quiet=True, 
-                json_output=True
-            )
-        
+            result = fsign.verify_fsign(str(tmp_path), quiet=True, json_output=True)
+
         assert result is True
         json_str = output.getvalue()
         data = json.loads(json_str)
-        
+
         assert data["valid"] is True
         assert data["signature_valid"] is True
         assert data["filesystem_matches"] is True
@@ -514,43 +519,39 @@ class TestJSONOutput:
         """Test JSON output when file is modified."""
         # Setup
         (tmp_path / "test.txt").write_text("original")
-        
+
         def mock_sign(manifest, key_id):
             return b"MOCK_SIG"
-        
+
         def mock_verify(manifest, sig):
             return fsign.GpgStatus(
                 valid_signature=True,
                 fingerprint="ABCD1234",
                 primary_key_id="ABCD1234",
                 user_id="Test",
-                summary="Valid"
+                summary="Valid",
             )
-        
+
         monkeypatch.setattr(fsign, "gpg_detach_sign_bytes", mock_sign)
         monkeypatch.setattr(fsign, "gpg_verify_sig", mock_verify)
-        
+
         # Create signature
         fsign.create_fsign(str(tmp_path), quiet=True)
-        
+
         # Modify file
         (tmp_path / "test.txt").write_text("modified")
-        
+
         # Verify with JSON
         import io
         import contextlib
-        
+
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
-            result = fsign.verify_fsign(
-                str(tmp_path),
-                quiet=True,
-                json_output=True
-            )
-        
+            result = fsign.verify_fsign(str(tmp_path), quiet=True, json_output=True)
+
         assert result is False
         data = json.loads(output.getvalue())
-        
+
         assert data["valid"] is False
         assert data["signature_valid"] is True
         assert data["filesystem_matches"] is False
@@ -561,42 +562,38 @@ class TestJSONOutput:
         """Test JSON output with invalid signature."""
         # Setup
         (tmp_path / "test.txt").write_text("content")
-        
+
         def mock_sign(manifest, key_id):
             return b"MOCK_SIG"
-        
+
         def mock_verify_fail(manifest, sig):
             return fsign.GpgStatus(
                 valid_signature=False,
                 fingerprint=None,
                 primary_key_id=None,
                 user_id=None,
-                summary="Signature verification failed"
+                summary="Signature verification failed",
             )
-        
+
         monkeypatch.setattr(fsign, "gpg_detach_sign_bytes", mock_sign)
-        
+
         # Create signature
         fsign.create_fsign(str(tmp_path), quiet=True)
-        
+
         # Mock to fail verification
         monkeypatch.setattr(fsign, "gpg_verify_sig", mock_verify_fail)
-        
+
         # Verify with JSON
         import io
         import contextlib
-        
+
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
-            result = fsign.verify_fsign(
-                str(tmp_path),
-                quiet=True,
-                json_output=True
-            )
-        
+            result = fsign.verify_fsign(str(tmp_path), quiet=True, json_output=True)
+
         assert result is False
         data = json.loads(output.getvalue())
-        
+
         assert data["valid"] is False
         assert data["signature_valid"] is False
         assert "error" in data
@@ -608,57 +605,57 @@ class TestGPGRetry:
     def test_gpg_sign_succeeds_on_first_attempt(self, monkeypatch):
         """Test that signing succeeds on first attempt."""
         call_count = 0
-        
+
         def mock_run(cmd, input, capture_output):
             nonlocal call_count
             call_count += 1
-            
+
             class MockProc:
                 returncode = 0
                 stdout = b"SIGNATURE_DATA"
                 stderr = b""
-            
+
             return MockProc()
-        
+
         monkeypatch.setattr(subprocess, "run", mock_run)
-        
+
         result = fsign.gpg_detach_sign_bytes(b"test_data", None)
-        
+
         assert result == b"SIGNATURE_DATA"
         assert call_count == 1
 
     def test_gpg_sign_retries_on_failure(self, monkeypatch):
         """Test that signing retries up to 3 times."""
         call_count = 0
-        
+
         def mock_run(cmd, input, capture_output):
             nonlocal call_count
             call_count += 1
-            
+
             class MockProc:
                 returncode = 1
                 stdout = b""
                 stderr = b"GPG error"
-            
+
             return MockProc()
-        
+
         # Mock time.sleep to avoid actual delays in tests
         monkeypatch.setattr("time.sleep", lambda x: None)
         monkeypatch.setattr(subprocess, "run", mock_run)
-        
+
         with pytest.raises(RuntimeError, match="failed after 3 attempts"):
             fsign.gpg_detach_sign_bytes(b"test_data", None)
-        
+
         assert call_count == 3
 
     def test_gpg_sign_succeeds_on_retry(self, monkeypatch):
         """Test that signing succeeds on second attempt."""
         call_count = 0
-        
+
         def mock_run(cmd, input, capture_output):
             nonlocal call_count
             call_count += 1
-            
+
             class MockProc:
                 if call_count == 1:
                     returncode = 1
@@ -668,14 +665,14 @@ class TestGPGRetry:
                     returncode = 0
                     stdout = b"SIGNATURE_DATA"
                     stderr = b""
-            
+
             return MockProc()
-        
+
         monkeypatch.setattr("time.sleep", lambda x: None)
         monkeypatch.setattr(subprocess, "run", mock_run)
-        
+
         result = fsign.gpg_detach_sign_bytes(b"test_data", None)
-        
+
         assert result == b"SIGNATURE_DATA"
         assert call_count == 2  # Failed once, succeeded on second try
 
@@ -688,25 +685,25 @@ class TestListCommand:
         # Setup
         (tmp_path / "file1.txt").write_text("content1")
         (tmp_path / "file2.txt").write_text("content2")
-        
+
         def mock_sign(manifest, key_id):
             return b"MOCK_SIG"
-        
+
         def mock_verify(manifest, sig):
             return fsign.GpgStatus(
                 valid_signature=True,
                 fingerprint="ABCD1234ABCD1234",
                 primary_key_id="ABCD1234",
                 user_id="Test User <test@example.com>",
-                summary="Valid"
+                summary="Valid",
             )
-        
+
         monkeypatch.setattr(fsign, "gpg_detach_sign_bytes", mock_sign)
         monkeypatch.setattr(fsign, "gpg_verify_sig", mock_verify)
-        
+
         # Create signature
         fsign.create_fsign(str(tmp_path), quiet=True)
-        
+
         # List it
         fsign_path = str(tmp_path / ".fsign")
         result = fsign.list_fsign(fsign_path, json_output=False)
@@ -716,38 +713,38 @@ class TestListCommand:
         """Test JSON output for list command."""
         # Setup
         (tmp_path / "test.txt").write_text("test")
-        
+
         def mock_sign(manifest, key_id):
             return b"MOCK_SIG"
-        
+
         def mock_verify(manifest, sig):
             return fsign.GpgStatus(
                 valid_signature=True,
                 fingerprint="ABCD1234",
                 primary_key_id="ABCD1234",
                 user_id="Test User",
-                summary="Valid"
+                summary="Valid",
             )
-        
+
         monkeypatch.setattr(fsign, "gpg_detach_sign_bytes", mock_sign)
         monkeypatch.setattr(fsign, "gpg_verify_sig", mock_verify)
-        
+
         # Create signature
         fsign.create_fsign(str(tmp_path), quiet=True)
-        
+
         # List with JSON output
         import io
         import contextlib
-        
+
         output = io.StringIO()
         fsign_path = str(tmp_path / ".fsign")
-        
+
         with contextlib.redirect_stdout(output):
             result = fsign.list_fsign(fsign_path, json_output=True)
-        
+
         assert result is True
         data = json.loads(output.getvalue())
-        
+
         assert "file_count" in data
         assert data["file_count"] > 0
         assert "files" in data
@@ -756,10 +753,11 @@ class TestListCommand:
 
     def test_list_invalid_file(self, tmp_path):
         """Test listing non-existent file."""
-        result = fsign.list_fsign(str(tmp_path / "nonexistent.fsign"), json_output=False)
+        result = fsign.list_fsign(
+            str(tmp_path / "nonexistent.fsign"), json_output=False
+        )
         assert result is False
 
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
-

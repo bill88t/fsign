@@ -38,7 +38,7 @@ def load_ignore_patterns(root: str) -> List[str]:
     """Load ignore patterns from .fsignignore file."""
     ignore_file = Path(root) / ".fsignignore"
     patterns = []
-    
+
     if ignore_file.exists():
         try:
             with open(ignore_file, "r", encoding="utf-8") as f:
@@ -49,7 +49,7 @@ def load_ignore_patterns(root: str) -> List[str]:
                         patterns.append(line)
         except (IOError, OSError):
             pass  # If we can't read it, just continue without patterns
-    
+
     return patterns
 
 
@@ -57,16 +57,16 @@ def should_exclude(path: bytes, root: bytes, patterns: List[str]) -> bool:
     """Check if path matches any exclusion pattern."""
     if not patterns:
         return False
-    
+
     # Get relative path as string
     try:
         rel_path = relpath_bytes(path, root).decode("utf-8", errors="ignore")
     except (ValueError, AttributeError):
         return False
-    
+
     # Normalize path separators for pattern matching
     rel_path = rel_path.replace(os.sep, "/")
-    
+
     for pattern in patterns:
         # Support both glob-style and directory patterns
         if pattern.endswith("/"):
@@ -81,10 +81,10 @@ def should_exclude(path: bytes, root: bytes, patterns: List[str]) -> bool:
             if "/" in rel_path:
                 parts = rel_path.split("/")
                 for i in range(len(parts)):
-                    partial = "/".join(parts[:i+1])
+                    partial = "/".join(parts[: i + 1])
                     if fnmatch.fnmatch(partial, pattern):
                         return True
-    
+
     return False
 
 
@@ -93,19 +93,20 @@ def walk_bytes(root: bytes, patterns: Optional[List[str]] = None) -> Iterator[by
     """Yield absolute byte paths for files under root (no symlink-follow)."""
     if patterns is None:
         patterns = []
-    
+
     for dirpath, dirnames, filenames in os.walk(root, topdown=True, followlinks=False):
         # Filter out excluded directories
         dirnames[:] = [
-            d for d in dirnames 
-            if d not in EXCLUDE_BASENAMES and 
-            not should_exclude(os.path.join(dirpath, d), root, patterns)
+            d
+            for d in dirnames
+            if d not in EXCLUDE_BASENAMES
+            and not should_exclude(os.path.join(dirpath, d), root, patterns)
         ]
-        
+
         for fn in filenames:
             if fn in EXCLUDE_BASENAMES:
                 continue
-            
+
             full_path = os.path.join(dirpath, fn)
             if not should_exclude(full_path, root, patterns):
                 yield full_path
@@ -221,23 +222,23 @@ def gpg_detach_sign_bytes(manifest_bytes: bytes, key_id: str | None) -> bytes:
     cmd = ["gpg", "--batch", "--yes", "--detach-sign", "--output", "-"]
     if key_id:
         cmd += ["--local-user", key_id]
-    
+
     max_retries = 3
     last_error = None
-    
+
     for attempt in range(max_retries):
         proc = subprocess.run(cmd, input=manifest_bytes, capture_output=True)
         if proc.returncode == 0:
             return proc.stdout
-        
+
         # Store error for potential reporting
         stderr = proc.stderr.decode(errors="ignore").strip()
         last_error = stderr
-        
+
         # If not the last attempt, we'll retry
         if attempt < max_retries - 1:
             time.sleep(0.5)  # Brief delay before retry
-    
+
     # All retries exhausted
     raise RuntimeError(f"gpg sign failed after {max_retries} attempts: {last_error}")
 
@@ -370,12 +371,12 @@ def create_fsign(
     workers: int | None = None,
 ):
     root_b = os.fsencode(os.path.abspath(root))
-    
+
     # Load ignore patterns
     patterns = load_ignore_patterns(root)
     if patterns and not quiet:
         print(f"Loaded {len(patterns)} exclusion pattern(s) from .fsignignore")
-    
+
     if not quiet:
         print("Collecting files...")
     files = list(walk_bytes(root_b, patterns))
@@ -431,10 +432,11 @@ def verify_fsign(
         manifest, sig = read_fsign(fsign_path)
     except Exception as e:
         if json_output:
-            print(json.dumps({
-                "valid": False,
-                "error": f"Failed reading {fsign_path}: {e}"
-            }))
+            print(
+                json.dumps(
+                    {"valid": False, "error": f"Failed reading {fsign_path}: {e}"}
+                )
+            )
         else:
             print(f"Error: Failed reading {fsign_path}: {e}", file=sys.stderr)
         return False
@@ -442,12 +444,16 @@ def verify_fsign(
     status = gpg_verify_sig(manifest, sig)
     if not status.valid_signature:
         if json_output:
-            print(json.dumps({
-                "valid": False,
-                "signature_valid": False,
-                "error": "GPG signature is INVALID",
-                "details": status.summary
-            }))
+            print(
+                json.dumps(
+                    {
+                        "valid": False,
+                        "signature_valid": False,
+                        "error": "GPG signature is INVALID",
+                        "details": status.summary,
+                    }
+                )
+            )
         else:
             print(
                 f"Error: GPG signature is INVALID.  Details:\n{status.summary}",
@@ -466,12 +472,16 @@ def verify_fsign(
         if not status.primary_key_id:
             err_msg = "Signature is valid, but primary key ID could not be extracted to verify against the trusted key."
             if json_output:
-                print(json.dumps({
-                    "valid": False,
-                    "signature_valid": True,
-                    "key_check_failed": True,
-                    "error": err_msg
-                }))
+                print(
+                    json.dumps(
+                        {
+                            "valid": False,
+                            "signature_valid": True,
+                            "key_check_failed": True,
+                            "error": err_msg,
+                        }
+                    )
+                )
             else:
                 print(f"Error: {err_msg}", file=sys.stderr)
             return False
@@ -486,13 +496,17 @@ def verify_fsign(
                 print("OK: Primary key ID matches the trusted key.")
         else:
             if json_output:
-                print(json.dumps({
-                    "valid": False,
-                    "signature_valid": True,
-                    "key_mismatch": True,
-                    "expected_key": normalized_trusted,
-                    "got_key": normalized_primary
-                }))
+                print(
+                    json.dumps(
+                        {
+                            "valid": False,
+                            "signature_valid": True,
+                            "key_mismatch": True,
+                            "expected_key": normalized_trusted,
+                            "got_key": normalized_primary,
+                        }
+                    )
+                )
             else:
                 print(f"Error: Primary key ID mismatch!", file=sys.stderr)
                 print(f"  Expected: {normalized_trusted}", file=sys.stderr)
@@ -507,10 +521,9 @@ def verify_fsign(
         parsed = parse_manifest(manifest)
     except ValueError as e:
         if json_output:
-            print(json.dumps({
-                "valid": False,
-                "error": f"Failed to parse manifest: {e}"
-            }))
+            print(
+                json.dumps({"valid": False, "error": f"Failed to parse manifest: {e}"})
+            )
         else:
             print(f"Error: Failed to parse manifest: {e}", file=sys.stderr)
         return False
@@ -531,10 +544,14 @@ def verify_fsign(
                 entries.append(fut.result())
             except Exception as e:
                 if json_output:
-                    print(json.dumps({
-                        "valid": False,
-                        "error": f"Error hashing file during verify: {e}"
-                    }))
+                    print(
+                        json.dumps(
+                            {
+                                "valid": False,
+                                "error": f"Error hashing file during verify: {e}",
+                            }
+                        )
+                    )
                 else:
                     print(f"\nError hashing file during verify: {e}", file=sys.stderr)
                 return False
@@ -548,7 +565,7 @@ def verify_fsign(
                 "signature_valid": True,
                 "filesystem_matches": True,
                 "fingerprint": status.fingerprint,
-                "signer": status.user_id
+                "signer": status.user_id,
             }
             if status.primary_key_id:
                 result["key_id"] = status.primary_key_id
@@ -579,20 +596,28 @@ def verify_fsign(
         if m_d != d_d:
             diffs.append({"field": "hash", "manifest": m_d.hex(), "disk": d_d.hex()})
         if diffs:
-            mismatches.append({
-                "file": k.decode(errors='replace'),
-                "differences": diffs
-            })
+            mismatches.append(
+                {"file": k.decode(errors="replace"), "differences": diffs}
+            )
 
     if json_output:
-        print(json.dumps({
-            "valid": False,
-            "signature_valid": True,
-            "filesystem_matches": False,
-            "missing_files": [f.decode(errors='replace') for f in sorted(missing_files)],
-            "extra_files": [f.decode(errors='replace') for f in sorted(extra_files)],
-            "mismatched_files": mismatches
-        }, indent=2))
+        print(
+            json.dumps(
+                {
+                    "valid": False,
+                    "signature_valid": True,
+                    "filesystem_matches": False,
+                    "missing_files": [
+                        f.decode(errors="replace") for f in sorted(missing_files)
+                    ],
+                    "extra_files": [
+                        f.decode(errors="replace") for f in sorted(extra_files)
+                    ],
+                    "mismatched_files": mismatches,
+                },
+                indent=2,
+            )
+        )
     else:
         print(
             "\nVALIDATION:  FAILED. Filesystem state does not match the signature.",
@@ -608,7 +633,9 @@ def verify_fsign(
                 if d["field"] == "hash":
                     diff_strs.append("content hash")
                 else:
-                    diff_strs.append(f"{d['field']} (manifest:{d['manifest']}, disk:{d['disk']})")
+                    diff_strs.append(
+                        f"{d['field']} (manifest:{d['manifest']}, disk:{d['disk']})"
+                    )
             print(
                 f"  MISMATCH: {item['file']} ({', '.join(diff_strs)})",
                 file=sys.stderr,
@@ -627,7 +654,7 @@ def list_fsign(fsign_path: str, json_output: bool = False) -> bool:
         else:
             print(f"Error: Failed reading {fsign_path}: {e}", file=sys.stderr)
         return False
-    
+
     # Parse manifest
     try:
         parsed = parse_manifest(manifest)
@@ -637,39 +664,41 @@ def list_fsign(fsign_path: str, json_output: bool = False) -> bool:
         else:
             print(f"Error: Failed to parse manifest: {e}", file=sys.stderr)
         return False
-    
+
     # Get GPG signature info (without full verification)
     status = gpg_verify_sig(manifest, sig)
-    
+
     if json_output:
         files_info = []
         for path, typ, length, digest in parsed:
-            files_info.append({
-                "path": path.decode(errors='replace'),
-                "type": "file" if typ == 0 else "symlink",
-                "size": length,
-                "sha256": digest.hex()
-            })
-        
+            files_info.append(
+                {
+                    "path": path.decode(errors="replace"),
+                    "type": "file" if typ == 0 else "symlink",
+                    "size": length,
+                    "sha256": digest.hex(),
+                }
+            )
+
         output = {
             "file_count": len(parsed),
             "signature_valid": status.valid_signature,
-            "files": files_info
+            "files": files_info,
         }
-        
+
         if status.fingerprint:
             output["fingerprint"] = status.fingerprint
         if status.user_id:
             output["signer"] = status.user_id
         if status.primary_key_id:
             output["key_id"] = status.primary_key_id
-        
+
         print(json.dumps(output, indent=2))
     else:
         print(f"Signature file: {fsign_path}")
         print(f"File count: {len(parsed)}")
         print(f"Signature valid: {'Yes' if status.valid_signature else 'No'}")
-        
+
         if status.valid_signature:
             if status.user_id:
                 print(f"Signed by: {status.user_id}")
@@ -677,13 +706,13 @@ def list_fsign(fsign_path: str, json_output: bool = False) -> bool:
                 print(f"Fingerprint: {status.fingerprint}")
             if status.primary_key_id:
                 print(f"Key ID: {status.primary_key_id}")
-        
+
         print(f"\nFiles in manifest:")
         for path, typ, length, digest in parsed:
             type_str = "file" if typ == 0 else "symlink"
-            path_str = path.decode(errors='replace')
+            path_str = path.decode(errors="replace")
             print(f"  [{type_str}] {path_str} ({length} bytes)")
-    
+
     return True
 
 
@@ -770,7 +799,11 @@ def main():
             )
         elif args.list:
             # For list command, use fsign_path if provided, otherwise default
-            fsign_path = args.fsign_path if args.fsign_path else os.path.join(args.root, ".fsign")
+            fsign_path = (
+                args.fsign_path
+                if args.fsign_path
+                else os.path.join(args.root, ".fsign")
+            )
             ok = list_fsign(fsign_path, json_output=args.json)
             sys.exit(0 if ok else 1)
         else:
