@@ -7,9 +7,8 @@ A utility for signing a folder/filesystem with an OpenPGP GPG key.
 - **GPG-based signatures**: Uses OpenPGP GPG for cryptographic signing and verification
 - **Parallel hashing**: Multi-threaded file hashing for fast performance
 - **Pattern-based exclusions**: `.fsignignore` file support (similar to `.gitignore`)
-- **JSON output**: Machine-readable output for CI/CD integration
+- **JSON output**: Machine-readable output for scripting / automation
 - **List/info command**: View signature details without full verification
-- **Robust signing**: Automatic retry (3 attempts) for transient GPG failures
 - **Symlink support**: Handles both regular files and symbolic links
 - **Detailed verification**: Reports missing, extra, and modified files
 
