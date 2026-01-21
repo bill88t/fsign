@@ -13,7 +13,7 @@ FLAGS = 0  # 1 byte reserved
 HEADER_LEN = 8  # MAGIC(6)+VER(1)+FLAGS(1)
 
 CHUNK = 1 << 20  # 1MB
-EXCLUDE_BASENAMES = {b".fsign", b".fsignignore"}
+EXCLUDE_BASENAMES = {b".fsign"}
 
 
 # A structure to hold parsed GPG status information.

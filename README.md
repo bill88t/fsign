@@ -24,7 +24,7 @@ cd fsign
 chmod +x fsign.py
 
 # Optional: Install to system
-sudo cp fsign.py /usr/local/bin/fsign
+sudo cp fsign.py /usr/bin/fsign
 ```
 
 ## Usage
@@ -90,6 +90,8 @@ cache/
 build/
 dist/
 ```
+
+**Security Note**: The `.fsignignore` file itself is **included** in the signature to prevent tampering. If an attacker modifies or adds a `.fsignignore` file after signing, verification will fail.
 
 Patterns support:
 - Glob patterns: `*.log`, `*.tmp`
