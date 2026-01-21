@@ -159,7 +159,6 @@ The `.fsign` file format:
 
 ## Security Features
 
-- **Automatic GPG retry**: 3 automatic retry attempts for transient GPG failures
 - **Key verification**: Optional trusted key ID checking
 - **Cryptographic hashing**: SHA-256 for file integrity
 - **Detached signatures**: GPG signature separate from manifest data
