@@ -12,7 +12,12 @@ A utility for signing a folder/filesystem with an OpenPGP GPG key.
 - **Symlink support**: Handles both regular files and symbolic links
 - **Detailed verification**: Reports missing, extra, and modified files
 
-## Installation
+## Installation (Arch Linux)
+
+It can be installed from the AUR or the BredOS repos:
+`yay -S fsign`
+
+## Installation (Non Arch Linux)
 
 ```bash
 # Clone repository
@@ -90,7 +95,7 @@ build/
 dist/
 ```
 
-**Security Note**: The `.fsignignore` file itself is **included** in the signature to prevent tampering. If an attacker modifies or adds a `.fsignignore` file after signing, verification will fail.
+**Note**: The `.fsignignore` file itself, unlike the `.fsign` file, is **included** in the signature to prevent tampering. If an attacker modifies or adds a `.fsignignore` file after signing, verification will fail.
 
 Patterns support:
 - Glob patterns: `*.log`, `*.tmp`
